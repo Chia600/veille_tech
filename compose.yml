@@ -1,0 +1,52 @@
+version: '3.8'
+services:
+  spring-boot:
+    build:
+      context: ./spring_app
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8080"
+    depends_on:
+      - postgres
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/veilletech
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=your_password
+    networks:
+      - veille-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: veilletech
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - veille-network
+    mem_limit: 256m
+
+  python-script:
+    build:
+      context: ./python_script
+      dockerfile: Dockerfile
+    depends_on:
+      spring-boot:
+        condition: service_healthy
+    networks:
+      - veille-network
+    mem_limit: 256m
+
+networks:
+  veille-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
