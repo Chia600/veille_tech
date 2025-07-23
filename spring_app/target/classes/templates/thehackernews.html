@@ -6,13 +6,13 @@
     <link rel="stylesheet" href="/css/styles.css"/>
 </head>
 <body>
-    <h1>Articles ThreatPost</h1>
+    <h1>Articles thehackernews</h1>
     <div th:each="resource : ${resources}">
         <h2><a th:href="${resource.link}" th:text="${resource.title}"></a></h2>
         <p th:utext="${resource.description}"></p>
         <hr/>
     </div>
-    <p th:if="${#lists.isEmpty(resources)}">Aucun article ThreatPost disponible.</p>
+    <p th:if="${#lists.isEmpty(resources)}">Aucun article Thehackernews disponible.</p>
     <a href="/">Retour aux CVE (NVD)</a> | <a href="/certfr">CERT-FR</a> | <a href="/nvdrss">NVD RSS</a>
 </body>
 </html>
