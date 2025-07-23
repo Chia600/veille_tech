@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Articles ThreatPost</title>
+    <meta charset="UTF-8"/>
+    <link rel="stylesheet" href="/css/styles.css"/>
+</head>
+<body>
+    <h1>Articles ThreatPost</h1>
+    <div th:each="resource : ${resources}">
+        <h2><a th:href="${resource.link}" th:text="${resource.title}"></a></h2>
+        <p th:utext="${resource.description}"></p>
+        <hr/>
+    </div>
+    <p th:if="${#lists.isEmpty(resources)}">Aucun article ThreatPost disponible.</p>
+    <a href="/">Retour aux CVE (NVD)</a> | <a href="/certfr">CERT-FR</a> | <a href="/nvdrss">NVD RSS</a>
+</body>
+</html>

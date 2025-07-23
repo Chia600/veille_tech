@@ -1,11 +1,16 @@
-package com.example.veilletech.repository;
+package com.exemple.veilletech.Repository;
 
-import com.example.veilletech.model.Resource;
+import com.exemple.veilletech.model.Resource;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 
-@Repository
-public interface ResourceRepository extends JpaRepository<Resource, String> {
+public interface ResourceRepository extends JpaRepository<Resource, Long> {
+    List<Resource> findBySource(String source);
     List<Resource> findByTitleContainingIgnoreCase(String title);
+    List<Resource> findByDescriptionContainingIgnoreCase(String description);
+    List<Resource> findByLinkContainingIgnoreCase(String link);
+    List<Resource> findBySourceAndTitleContainingIgnoreCase(String source, String title);
+    List<Resource> findBySourceAndDescriptionContainingIgnoreCase(String source, String description);
+    List<Resource> findBySourceAndLinkContainingIgnoreCase(String source, String link);
+    List<Resource> findBySourceAndTitleContainingIgnoreCaseAndDescriptionContainingIgnoreCaseAndLinkContainingIgnoreCase(String source, String title, String description, String link);
 }

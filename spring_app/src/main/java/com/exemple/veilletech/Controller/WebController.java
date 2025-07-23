@@ -1,6 +1,6 @@
-package com.example.veilletech.controller;
+package com.exemple.veilletech.Controller;
 
-import com.example.veilletech.repository.ResourceRepository;
+import com.exemple.veilletech.Repository.ResourceRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +16,36 @@ public class WebController {
 
     @GetMapping("/")
     public String index(Model model) {
-        model.addAttribute("resources", resourceRepository.findAll());
+        model.addAttribute("resources", resourceRepository.findBySource("NVD"));
         return "index";
+    }
+
+   /**
+    * 
+    * @param model 
+    * @return
+     @GetMapping("/newfetch")
+    public String newFetch(Model model) {
+        model.addAttribute("resources", resourceRepository.findBySource("NVD"));
+        return "newfetch";
+    }
+*/
+    @GetMapping("/certfr")
+    public String certFr(Model model) {
+        model.addAttribute("resources", resourceRepository.findBySource("CERT-FR"));
+        return "certfr";
+    }
+
+    @GetMapping("/nvdrss")
+    public String nvdRss(Model model) {
+        model.addAttribute("resources", resourceRepository.findBySource("NVD-RSS"));
+        return "nvdrss";
+    }
+
+    @GetMapping("/thehackernews")
+    public String theHackerNews(Model model) {
+        model.addAttribute("resources", resourceRepository.findBySource("TheHackerNews"));
+        return "thehackernews";
     }
 
     @GetMapping("/health")

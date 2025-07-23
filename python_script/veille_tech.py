@@ -3,9 +3,18 @@ import time
 from datetime import datetime, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import feedparser
+import logging
+
+# Configuration du logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 BASE_URL = "http://spring-boot:8080/api/resources"
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+CERT_FR_RSS = "https://www.cert.ssi.gouv.fr/feed/"
+NVD_RSS = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
+HACKER_NEWS_RSS = "https://feeds.feedburner.com/TheHackersNews?format=xml"
 
 session = requests.Session()
 retries = Retry(total=5, backoff_factor=1, status_forcelist=[429, 502, 503, 504])
@@ -13,97 +22,159 @@ session.mount("http://", HTTPAdapter(max_retries=retries))
 session.mount("https://", HTTPAdapter(max_retries=retries))
 
 def wait_for_spring_boot():
-    print("Checking if Spring Boot is ready...")
+    logger.info("Vérification de la disponibilité de Spring Boot...")
     for _ in range(30):  # Attendre jusqu'à 5 minutes
         try:
-            response = session.get("http://spring-boot:8080/health")
-            print(f"Healthcheck response: {response.status_code} - {response.text}")
+            response = session.get("http://spring-boot:8080/health", timeout=10)
+            logger.info(f"Réponse du healthcheck : {response.status_code} - {response.text}")
             if response.status_code == 200:
-                print("Spring Boot is ready!")
+                logger.info("Spring Boot est prêt !")
                 return
         except requests.exceptions.RequestException as e:
-            print(f"Waiting for Spring Boot... Error: {e}")
+            logger.warning(f"En attente de Spring Boot... Erreur : {e}")
             time.sleep(10)
-    raise Exception("Spring Boot did not start in time")
+    raise Exception("Spring Boot n'a pas démarré à temps")
 
 def fetch_nvd_cves():
     try:
-        print("Fetching NVD CVE data...")
-        # Calculer les dates pour les 3 derniers mois
+        logger.info("Récupération des données CVE de NVD...")
         end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=90)  # 3 mois = 90 jours
+        start_date = end_date - timedelta(days=90)
         params = {
             "resultsPerPage": 10,
             "startIndex": 0,
             "pubStartDate": start_date.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             "pubEndDate": end_date.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         }
-        print(f"Fetching CVEs from {params['pubStartDate']} to {params['pubEndDate']}")
+        logger.info(f"Récupération des CVE de {params['pubStartDate']} à {params['pubEndDate']}")
         response = session.get(NVD_API_URL, params=params, timeout=10)
-        print(f"HTTP status: {response.status_code}, URL: {response.url}")
-        if response.status_code != 200:
-            print(f"Failed to fetch CVE data: {response.status_code} - {response.text}")
-            return
+        logger.info(f"Statut HTTP : {response.status_code}, URL : {response.url}")
+        response.raise_for_status()
         data = response.json()
         vulnerabilities = data.get("vulnerabilities", [])
-        print(f"Found {len(vulnerabilities)} CVE entries")
+        logger.info(f"{len(vulnerabilities)} entrées CVE trouvées")
         if not vulnerabilities:
-            print("No CVE entries found. Check API URL or parameters.")
+            logger.warning("Aucune entrée CVE trouvée. Vérifiez l'URL de l'API ou les paramètres.")
             return
         for vuln in vulnerabilities:
             cve = vuln.get("cve", {})
             cve_id = cve.get("id", "")
-            description = ""
-            for desc in cve.get("descriptions", []):
-                if desc.get("lang") == "en":
-                    description = desc.get("value", "")
-                    break
+            description = next((desc.get("value", "") for desc in cve.get("descriptions", []) if desc.get("lang") == "en"), "")
             cve_link = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
             resource = {
                 "title": cve_id,
                 "link": cve_link,
-                "description": description
+                "description": description,
+                "source": "NVD"
             }
-            print(f"Sending POST request with payload: {resource}")
-            response = session.post(BASE_URL, json=resource)
-            print(f"POST response: {response.status_code} - {response.text}")
+            logger.info(f"Envoi de la requête POST avec le payload : {resource}")
+            response = session.post(BASE_URL, json=resource, timeout=10)
             response.raise_for_status()
-            print(f"Successfully posted CVE: {cve_id}")
+            logger.info(f"CVE posté avec succès : {cve_id}")
     except requests.exceptions.RequestException as e:
-        print(f"Erreur NVD: {e}")
+        logger.error(f"Erreur NVD : {e}")
     except Exception as e:
-        print(f"Unexpected error in fetch_nvd_cves: {e}")
+        logger.error(f"Erreur inattendue dans fetch_nvd_cves : {e}")
+
+def fetch_cert_fr():
+    try:
+        logger.info("Récupération des alertes CERT-FR...")
+        feed = feedparser.parse(CERT_FR_RSS)
+        logger.info(f"Statut du flux RSS CERT-FR : {feed.get('status', 'N/A')}")
+        logger.info(f"{len(feed.entries)} alertes trouvées dans le flux RSS")
+        if not feed.entries:
+            logger.warning("Aucune alerte trouvée dans le flux RSS.")
+            return
+        for entry in feed.entries[:10]:  # Limiter à 10 alertes
+            resource = {
+                "title": entry.get("title", "Sans titre"),
+                "link": entry.get("link", ""),
+                "description": entry.get("summary", "Aucune description disponible"),
+                "source": "CERT-FR"
+            }
+            logger.info(f"Envoi de la requête POST avec le payload : {resource}")
+            response = session.post(BASE_URL, json=resource, timeout=10)
+            response.raise_for_status()
+            logger.info(f"Alerte postée avec succès : {resource['title']}")
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération de CERT-FR : {e}")
+
+def fetch_nvd_rss():
+    try:
+        logger.info("Récupération des CVE de NVD RSS...")
+        feed = feedparser.parse(NVD_RSS)
+        logger.info(f"Statut du flux RSS NVD : {feed.get('status', 'N/A')}")
+        logger.info(f"{len(feed.entries)} CVE trouvés dans le flux RSS")
+        if not feed.entries:
+            logger.warning("Aucun CVE trouvé dans le flux RSS NVD.")
+            return
+        for entry in feed.entries[:10]:
+            resource = {
+                "title": entry.get("title", "Sans titre"),
+                "link": entry.get("link", ""),
+                "description": entry.get("summary", "Aucune description disponible"),
+                "source": "NVD-RSS"
+            }
+            logger.info(f"Envoi de la requête POST avec le payload : {resource}")
+            response = session.post(BASE_URL, json=resource, timeout=10)
+            response.raise_for_status()
+            logger.info(f"CVE posté avec succès : {resource['title']}")
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération de NVD RSS : {e}")
+
+def fetch_hacker_news():
+    try:
+        logger.info("Récupération des articles de The Hacker News...")
+        feed = feedparser.parse(HACKER_NEWS_RSS)
+        logger.info(f"Statut du flux RSS The Hacker News : {feed.get('status', 'N/A')}")
+        logger.info(f"{len(feed.entries)} articles trouvés")
+        if not feed.entries:
+            logger.warning("Aucun article trouvé dans le flux RSS The Hacker News.")
+            return
+        for entry in feed.entries[:10]:
+            resource = {
+                "title": entry.get("title", "Sans titre"),
+                "link": entry.get("link", ""),
+                "description": entry.get("summary", "Aucune description"),
+                "source": "TheHackerNews"
+            }
+            logger.info(f"Envoi de la requête POST avec le payload : {resource}")
+            response = session.post(BASE_URL, json=resource, timeout=10)
+            response.raise_for_status()
+            logger.info(f"Article posté avec succès : {resource['title']}")
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération de The Hacker News : {e}")
 
 def test_xss():
     try:
-        payload = {"title": "<script>alert(1)</script>", "link": "http://test.com", "description": "XSS test"}
-        print(f"Sending XSS test payload: {payload}")
-        response = session.post(BASE_URL, json=payload)
-        print(f"XSS test response: {response.status_code} - {response.text}")
+        payload = {"title": "<script>alert(1)</script>", "link": "http://test.com", "description": "Test XSS", "source": "Test"}
+        logger.info(f"Envoi du payload de test XSS : {payload}")
+        response = session.post(BASE_URL, json=payload, timeout=10)
         response.raise_for_status()
-        print("XSS test completed successfully")
+        logger.info("Test XSS terminé avec succès")
     except requests.exceptions.RequestException as e:
-        print(f"Erreur XSS: {e}")
+        logger.error(f"Erreur XSS : {e}")
 
 def test_sqli():
     try:
-        payload = {"title": "' UNION SELECT 1, current_database()--", "link": "http://test.com", "description": "SQLi test"}
-        print(f"Sending SQLi test payload: {payload}")
-        response = session.post(BASE_URL, json=payload)
-        print(f"SQLi test response: {response.status_code} - {response.text}")
+        payload = {"title": "' UNION SELECT 1, current_database()--", "link": "http://test.com", "description": "Test SQLi", "source": "Test"}
+        logger.info(f"Envoi du payload de test SQLi : {payload}")
+        response = session.post(BASE_URL, json=payload, timeout=10)
         response.raise_for_status()
-        print("SQLi test completed successfully")
+        logger.info("Test SQLi terminé avec succès")
     except requests.exceptions.RequestException as e:
-        print(f"Erreur SQLi: {e}")
+        logger.error(f"Erreur SQLi : {e}")
 
 if __name__ == "__main__":
-    print("Starting Python script...")
+    logger.info("Démarrage du script Python...")
     wait_for_spring_boot()
-    # Exécuter les tests XSS et SQLi une seule fois au démarrage
     test_xss()
     test_sqli()
     while True:
-        print(f"Starting CVE fetch cycle at {datetime.utcnow()}")
+        logger.info(f"Démarrage du cycle de récupération à {datetime.utcnow()}")
         fetch_nvd_cves()
-        print("CVE fetch cycle completed. Sleeping for 7 days...")
-        time.sleep(604800)  # 7 jours = 604 800 secondes
+        fetch_cert_fr()
+        fetch_nvd_rss()
+        fetch_hacker_news()
+        logger.info("Cycle de récupération terminé. Pause de 7 jours...")
+        time.sleep(604800)  # 7 jours

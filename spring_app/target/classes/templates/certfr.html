@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Alertes CERT-FR</title>
+    <meta charset="UTF-8"/>
+    <link rel="stylesheet" href="/css/styles.css"/>
+</head>
+<body>
+    <h1>Alertes CERT-FR</h1>
+    <div th:each="resource : ${resources}">
+        <h2><a th:href="${resource.link}" th:text="${resource.title}"></a></h2>
+        <p th:utext="${resource.description}"></p>
+        <hr/>
+    </div>
+    <p th:if="${#lists.isEmpty(resources)}">Aucune alerte CERT-FR disponible.</p>
+    <a href="/">Retour aux CVE (NVD)</a> | <a href="/nvdrss">NVD RSS</a> | <a href="/thehackernews">ThreatPost</a>
+</body>
+</html>

@@ -1,36 +1,46 @@
-package com.example.veilletech.controller;
+package com.exemple.veilletech.Controller;
 
-import com.example.veilletech.model.Resource;
-import com.example.veilletech.repository.ResourceRepository;
-import org.owasp.html.Sanitizers;
-import org.owasp.html.PolicyFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.exemple.veilletech.model.Resource;
+import com.exemple.veilletech.Repository.ResourceRepository;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/resources")
 public class ResourceController {
-    @Autowired
-    private ResourceRepository repository;
+    private final ResourceRepository repository;
 
-    @PostMapping
-    public Resource addResource(@RequestBody Resource resource) {
-        PolicyFactory policy = Sanitizers.FORMATTING.and(Sanitizers.LINKS);
-        resource.setTitle(policy.sanitize(resource.getTitle()));
-        resource.setDescription(policy.sanitize(resource.getDescription()));
-        resource.setId(UUID.randomUUID().toString());
-        return repository.save(resource);
+    public ResourceController(ResourceRepository repository) {
+        this.repository = repository;
     }
 
-    @GetMapping
-    public List<Resource> getResources() {
-        return repository.findAll();
+    @GetMapping("/{id}")
+    public ResponseEntity<Resource> getResourceById(@PathVariable Long id) {
+        Resource resource = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Resource not found"));
+        return ResponseEntity.ok(resource);
     }
 
     @GetMapping("/search")
-    public List<Resource> searchResources(@RequestParam String category) {
-        return repository.findByTitleContainingIgnoreCase(category);
+    public List<Resource> searchResources(@RequestParam String title) {
+        return repository.findByTitleContainingIgnoreCase(title);
+    }
+
+    @PostMapping
+    public ResponseEntity<Resource> createResource(@RequestBody Resource resource) {
+        Resource savedResource = repository.save(resource);
+        return ResponseEntity.ok(savedResource);
+    }
+
+    @GetMapping
+    public List<Resource> getAllResources() {
+        return repository.findAll();
+    }
+
+    @GetMapping("/by-source")
+    public List<Resource> getResourcesBySource(@RequestParam String source) {
+        return repository.findBySource(source);
     }
 }
