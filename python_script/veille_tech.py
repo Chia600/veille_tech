@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 BASE_URL = "http://spring-boot:8080/api/resources"
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 CERT_FR_RSS = "https://www.cert.ssi.gouv.fr/feed/"
-NVD_RSS = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
+CISA_KEV_RSS = "https://www.cisa.gov/uscert/ncas/alerts.xml"
 HACKER_NEWS_RSS = "https://feeds.feedburner.com/TheHackersNews?format=xml"
 
 session = requests.Session()
@@ -85,7 +85,7 @@ def fetch_cert_fr():
         if not feed.entries:
             logger.warning("Aucune alerte trouvée dans le flux RSS.")
             return
-        for entry in feed.entries[:10]:  # Limiter à 10 alertes
+        for entry in feed.entries[:10]:
             resource = {
                 "title": entry.get("title", "Sans titre"),
                 "link": entry.get("link", ""),
@@ -99,14 +99,18 @@ def fetch_cert_fr():
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de CERT-FR : {e}")
 
-def fetch_nvd_rss():
+def fetch_cisa_kev():
     try:
-        logger.info("Récupération des CVE de NVD RSS...")
-        feed = feedparser.parse(NVD_RSS)
-        logger.info(f"Statut du flux RSS NVD : {feed.get('status', 'N/A')}")
-        logger.info(f"{len(feed.entries)} CVE trouvés dans le flux RSS")
+        logger.info("Récupération des alertes CISA KEV...")
+        response = session.get(CISA_KEV_RSS, timeout=10)
+        logger.info(f"Statut HTTP brut : {response.status_code}, URL : {response.url}")
+        response.raise_for_status()
+        feed = feedparser.parse(response.content)
+        logger.info(f"Statut du flux RSS CISA KEV : {feed.get('status', 'N/A')}")
+        logger.info(f"Contenu brut du flux (premiers 500 caractères) : {response.text[:500]}")
+        logger.info(f"{len(feed.entries)} alertes trouvées dans le flux RSS")
         if not feed.entries:
-            logger.warning("Aucun CVE trouvé dans le flux RSS NVD.")
+            logger.warning("Aucune alerte trouvée dans le flux RSS CISA KEV. Vérifiez si le flux est vide ou mal formé.")
             return
         for entry in feed.entries[:10]:
             resource = {
@@ -118,9 +122,11 @@ def fetch_nvd_rss():
             logger.info(f"Envoi de la requête POST avec le payload : {resource}")
             response = session.post(BASE_URL, json=resource, timeout=10)
             response.raise_for_status()
-            logger.info(f"CVE posté avec succès : {resource['title']}")
+            logger.info(f"Alerte postée avec succès : {resource['title']}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erreur réseau lors de la récupération de CISA KEV : {e}")
     except Exception as e:
-        logger.error(f"Erreur lors de la récupération de NVD RSS : {e}")
+        logger.error(f"Erreur inattendue dans fetch_cisa_kev : {e}")
 
 def fetch_hacker_news():
     try:
@@ -174,7 +180,7 @@ if __name__ == "__main__":
         logger.info(f"Démarrage du cycle de récupération à {datetime.utcnow()}")
         fetch_nvd_cves()
         fetch_cert_fr()
-        fetch_nvd_rss()
+        fetch_cisa_kev()
         fetch_hacker_news()
         logger.info("Cycle de récupération terminé. Pause de 7 jours...")
         time.sleep(604800)  # 7 jours

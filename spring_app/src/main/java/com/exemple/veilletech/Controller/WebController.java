@@ -36,10 +36,10 @@ public class WebController {
         return "certfr";
     }
 
-    @GetMapping("/nvdrss")
+    @GetMapping("/cisa")
     public String nvdRss(Model model) {
         model.addAttribute("resources", resourceRepository.findBySource("NVD-RSS"));
-        return "nvdrss";
+        return "cisa";
     }
 
     @GetMapping("/thehackernews")

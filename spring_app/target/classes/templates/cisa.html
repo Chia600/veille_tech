@@ -6,13 +6,13 @@
     <link rel="stylesheet" href="/css/styles.css"/>
 </head>
 <body>
-    <h1>Vulnérabilités NVD RSS</h1>
+    <h1>Vulnérabilités CISA_KEV</h1>
     <div th:each="resource : ${resources}">
         <h2><a th:href="${resource.link}" th:text="${resource.title}"></a></h2>
         <p th:utext="${resource.description}"></p>
         <hr/>
     </div>
     <p th:if="${#lists.isEmpty(resources)}">Aucune vulnérabilité NVD RSS disponible.</p>
-    <a href="/">Retour aux CVE (NVD)</a> | <a href="/certfr">CERT-FR</a> | <a href="/thehackernews">ThreatPost</a>
+    <a href="/">Retour aux CVE (NVD)</a> | <a href="/certfr">CERT-FR</a> | <a href="/thehackernews">Thehackernews</a>
 </body>
 </html>
